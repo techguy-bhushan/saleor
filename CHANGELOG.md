@@ -51,6 +51,7 @@ All notable, unreleased changes to this project will be documented in this file.
 `CheckoutAddPromoCode`, `CheckoutPaymentCreate` will raise a ValidationError when product in the checkout is
 unavailable - #8978 by @IKarbowiak
 - Fix disabled warehouses appearing as valid click and collect points when checkout contains only preorders - #9052 by @rafalp
+- Allow fetching unpublished pages by app with manage pages permission - #9181 by @IKarbowiak
 
 
 # 3.0.0
