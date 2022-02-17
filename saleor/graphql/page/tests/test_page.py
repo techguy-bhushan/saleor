@@ -178,6 +178,85 @@ def test_staff_query_unpublished_page_by_slug_without_required_permission(
     assert content["data"]["page"] is None
 
 
+def test_app_query_unpublished_page_by_id(
+    app_api_client, page, permission_manage_pages
+):
+    # given
+    page.is_published = False
+    page.save()
+
+    app_api_client.app.permissions.add(permission_manage_pages)
+
+    variables = {"id": graphene.Node.to_global_id("Page", page.id)}
+
+    # when
+    response = app_api_client.post_graphql(
+        PAGE_QUERY,
+        variables,
+    )
+
+    # then
+    content = get_graphql_content(response)
+    assert content["data"]["page"]["id"] == variables["id"]
+
+
+def test_app_query_unpublished_page_by_id_without_required_permission(
+    app_api_client,
+    page,
+):
+    # given
+    page.is_published = False
+    page.save()
+
+    variables = {"id": graphene.Node.to_global_id("Page", page.id)}
+
+    # when
+    response = app_api_client.post_graphql(PAGE_QUERY, variables)
+
+    # then
+    content = get_graphql_content(response)
+    assert content["data"]["page"] is None
+
+
+def test_app_query_unpublished_page_by_slug(
+    app_api_client, page, permission_manage_pages
+):
+    # given
+    page.is_published = False
+    page.save()
+
+    app_api_client.app.permissions.add(permission_manage_pages)
+
+    variables = {"slug": page.slug}
+
+    # when
+    response = app_api_client.post_graphql(
+        PAGE_QUERY,
+        variables,
+    )
+
+    # then
+    content = get_graphql_content(response)
+    assert content["data"]["page"]["id"] == graphene.Node.to_global_id("Page", page.id)
+
+
+def test_app_query_unpublished_page_by_slug_without_required_permission(
+    app_api_client,
+    page,
+):
+    # given
+    page.is_published = False
+    page.save()
+
+    # when
+    variables = {"slug": page.slug}
+
+    # then
+    response = app_api_client.post_graphql(PAGE_QUERY, variables)
+    content = get_graphql_content(response)
+    assert content["data"]["page"] is None
+
+
 def test_staff_query_page_by_invalid_id(staff_api_client, page):
     id = "bh/"
     variables = {"id": id}
@@ -243,6 +322,135 @@ def test_get_page_with_sorted_attribute_values(
     assert [value["id"] for value in values] == [
         graphene.Node.to_global_id("AttributeValue", val.pk) for val in attr_values
     ]
+
+
+PAGES_QUERY = """
+    query {
+        pages(first: 10) {
+            edges {
+                node {
+                    id
+                    title
+                    slug
+                    pageType {
+                        id
+                    }
+                    content
+                    contentJson
+                    attributes {
+                        attribute {
+                            slug
+                        }
+                        values {
+                            id
+                            slug
+                        }
+                    }
+                }
+            }
+        }
+    }
+"""
+
+
+def test_query_pages_by_staff(
+    staff_api_client, page_list, page, permission_manage_pages
+):
+    """Ensure staff user with manage pages permission can query all pages,
+    including unpublished pages."""
+    # given
+    unpublished_page = page
+    unpublished_page.is_published = False
+    unpublished_page.save(update_fields=["is_published"])
+
+    page_count = Page.objects.count()
+
+    staff_api_client.user.user_permissions.add(permission_manage_pages)
+
+    # when
+    response = staff_api_client.post_graphql(PAGES_QUERY)
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["pages"]["edges"]
+    assert len(data) == page_count
+
+
+def test_query_pages_by_app(app_api_client, page_list, page, permission_manage_pages):
+    """Ensure app with manage pages permission can query all pages,
+    including unpublished pages."""
+    # given
+    unpublished_page = page
+    unpublished_page.is_published = False
+    unpublished_page.save(update_fields=["is_published"])
+
+    page_count = Page.objects.count()
+
+    app_api_client.app.permissions.add(permission_manage_pages)
+
+    # when
+    response = app_api_client.post_graphql(PAGES_QUERY)
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["pages"]["edges"]
+    assert len(data) == page_count
+
+
+def test_query_pages_by_staff_no_perm(staff_api_client, page_list, page):
+    """Ensure staff user without manage pages permission can query
+    only published pages."""
+
+    # given
+    unpublished_page = page
+    unpublished_page.is_published = False
+    unpublished_page.save(update_fields=["is_published"])
+
+    page_count = Page.objects.count()
+
+    # when
+    response = staff_api_client.post_graphql(PAGES_QUERY)
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["pages"]["edges"]
+    assert len(data) == page_count - 1
+
+
+def test_query_pages_by_app_no_perm(app_api_client, page_list, page):
+    """Ensure app without manage pages permission can query only published pages."""
+    # given
+    unpublished_page = page
+    unpublished_page.is_published = False
+    unpublished_page.save(update_fields=["is_published"])
+
+    page_count = Page.objects.count()
+
+    # when
+    response = app_api_client.post_graphql(PAGES_QUERY)
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["pages"]["edges"]
+    assert len(data) == page_count - 1
+
+
+def test_query_pages_by_customer(api_client, page_list, page):
+    """Ensure customer user can query only published pages."""
+    # given
+    unpublished_page = page
+    unpublished_page.is_published = False
+    unpublished_page.save(update_fields=["is_published"])
+
+    page_count = Page.objects.count()
+
+    # when
+    response = api_client.post_graphql(PAGES_QUERY)
+
+    # then
+    content = get_graphql_content(response)
+    data = content["data"]["pages"]["edges"]
+    assert len(data) == page_count - 1
 
 
 CREATE_PAGE_MUTATION = """
